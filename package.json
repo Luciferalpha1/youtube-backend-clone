@@ -1,0 +1,15 @@
+{
+  "name": "yotube-backend",
+  "version": "1.0.0",
+  "description": "trying and testing shi",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "javascript",
+    "backend"
+  ],
+  "author": "Luciferalpha1",
+  "license": "ISC"
+}
