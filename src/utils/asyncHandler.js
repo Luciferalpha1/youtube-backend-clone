@@ -33,7 +33,7 @@ const aysncHandler = (fn) => async (req, res, next) => {
 */
 // A BETTER WAY TO WRITE THE HANDLER. (will learn this deeply more.)
 const asyncHandler = (requestHandler) => {
-  (req, res, next) => {
+  return (req, res, next) => {
     Promise.resolve(requestHandler(req, res, next)).catch((err) => next(err));
   };
 };

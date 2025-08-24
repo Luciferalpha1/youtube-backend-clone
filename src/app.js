@@ -20,4 +20,11 @@ app.use(express.urlencoded({ extended: true, limit: "16kb" })); //for data comin
 app.use(express.static("public")); //for saving pdf's,images, etc in the server, currently using public folder as storage folder
 app.use(cookieParser());
 
+//! ROUTERS !!
+//? just for "making it clean" purposes we import here. Nothings wrong.
+
+import userRouter from "./routes/user.routes.js";
+
+app.use("/api/v1/users", userRouter);
+
 export { app };
