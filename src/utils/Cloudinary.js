@@ -3,6 +3,7 @@ import fs from "fs"; // file handling package in node.js
 
 /*
 BASIC CLOUDINARY CONFIG: read documentation for more details.
+cloudinary's returns a "response" object, url is a method from the object.
 */
 
 // cloudinary configuration.
