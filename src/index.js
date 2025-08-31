@@ -1,8 +1,7 @@
-import dotenv from "dotenv";
+import dotenv from "dotenv"; // Loading .env correctly.
+dotenv.config({ path: "./.env" });
 import connectDB from "./db/index.js";
 import { app } from "./app.js";
-
-dotenv.config({ path: "./.env" });
 
 connectDB()
   //async functions always return a promise hence,

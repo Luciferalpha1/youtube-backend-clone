@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { registerUser } from "../controllers/user.controller.js";
-import { upload } from "../middleswares/multer.middlewares.js";
-import { User } from "../models/user.model.js";
+import { upload } from "../middlewares/multer.middlewares.js";
+
 /*
 This is how we write routers, keeping this is in a seperate file
 */
@@ -9,7 +9,8 @@ const router = Router();
 
 router.route("/register").post(
   //multer middleware for avatar and coverImage.
-  upload.fields(
+  //error i got: "upload" object expected .fields to be an array but I passed 2 obj. (RESOLVED)
+  upload.fields([
     {
       name: "avatar",
       maxCount: 1,
@@ -17,8 +18,8 @@ router.route("/register").post(
     {
       name: "coverImage",
       maxCount: 1,
-    }
-  ),
+    },
+  ]),
   registerUser
 );
 

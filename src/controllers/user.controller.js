@@ -42,12 +42,12 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(400, "All field are required.");
   }
   // validating email using string.includes()
-  if (email.includes("@")) {
+  if (!email.includes("@")) {
     throw new ApiError(400, "Invalid email address");
   }
 
   //! 2. Checking if User already exists.
-  const existingUser = User.findOne({
+  const existingUser = await User.findOne({
     $or: [{ username }, { email }],
   });
 
@@ -62,6 +62,8 @@ const registerUser = asyncHandler(async (req, res) => {
   if (!avatarLocalFilePath) {
     throw new ApiError(400, "Avatar Image needed.");
   }
+
+  console.log("Avatar Local File Path", avatarLocalFilePath);
 
   //! 4. Upload avatar to Cloudinary: (also error handled)
   const avatar = await uploadOnCloudinary(avatarLocalFilePath);
@@ -86,7 +88,8 @@ const registerUser = asyncHandler(async (req, res) => {
     username: username.toLowerCase(), //we prefer lowercase strings.
   });
 
-  //! 8.Checking if user has been created or not:
+  //! 8.Checking if user has been created or not
+  //! 6. Also removing password and refreshToken while returning shi
   const createdUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
