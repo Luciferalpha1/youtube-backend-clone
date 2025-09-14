@@ -90,6 +90,10 @@ You look up the user by email in the DB.
 Then you must check if the entered password matches the saved hash.
 You can’t just compare strings, because the DB stores a hash, not the raw password.
 -ps: returns true or false if password from DB matches/doesnt match.
+
+
+note: "this.password" is the hashed password in the db.
+"password" is the password sent by the user in req.body.
 */
 
 userSchema.methods.isPasswordCorrect = async function (password) {

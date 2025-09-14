@@ -4,10 +4,32 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/Cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
+const generateAccessandRefreshToken = async (userId) => {
+  try {
+    const user = await User.findById(userId); // got user from db. (fresh instance)
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+
+    //Adding refreshToken to the user object i.e in the db
+    user.refreshToken = refreshToken;
+    /*
+    Saving this inside the DB,
+    note: the userSchema tells us that password/avatar/email etc field are required and here we are only sending/adding the refreshToken inside the user object in the db.
+    Although we have email,avatar etc already stored in the obj, we dont have password field as we had removed it already.
+    Hence we use "validateBeforeSave: false" as we dont want any schemaValidation during the saving of refreshToken in the db.
+    */
+    await user.save({ validateBeforeSave: false });
+
+    return { accessToken, refreshToken };
+  } catch (error) {
+    throw new ApiError(500, "Access and Refresh Token couldnt be generated.");
+  }
+};
+
 /*
-Actual implementation of when /register URL is hit.
-? Try to understand this more deeply (mainly the mongoose methods)
-*/
+  Actual implementation of when /register URL is hit.
+  ? Try to understand this more deeply (mainly the mongoose methods)
+  */
 const registerUser = asyncHandler(async (req, res) => {
   /*
   !REAL LOGIC FOR REGISTERING THE USER:
@@ -104,4 +126,115 @@ const registerUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, createdUser, "User created successfully."));
 });
 
-export { registerUser };
+//? Crazy Login Functionality.
+const loginUser = asyncHandler(async (req, res) => {
+  //! TODOS FOR LOGIN USER:
+  /*
+  1. Receive Login Request from frontend (req.body)
+  2. Check if email/username is provided. (error handle if not provided)
+  3. Find User in database
+  4. Verify Password 
+  5. Give user access token and refresh token (important)
+  6. send cookies(secure)
+  7. Send respone with accessToken (not password)
+*/
+  //! 1. Receive Info from frontend.
+  const { email, username, password } = req.body;
+
+  //! 2. Check if email/username is provided.
+  if (!(username || email)) {
+    new ApiError(400, "username or email is mandatory.");
+  }
+
+  //! 3. Finding User in database by either username or password.
+  /*
+  User cannot be used here as it is an object of monogoDB's mongoose, methods availble using User object is "findone() etc."
+  The response back from mongoDB (instance) is stored in "user" which is defined below, so use this instance if you want details already fetched from mongoDB.
+  */
+  const user = await User.findOne({
+    $or: [{ username }, { email }], //mongoose "or" operator (very useful)
+  });
+
+  if (!user) {
+    throw new ApiError(
+      400,
+      "User does not exist. Make sure to register yourself"
+    );
+  }
+
+  //! 4. Verfication of password
+  const isPasswordValid = await user.isPasswordCorrect(password);
+
+  if (!isPasswordValid) {
+    throw new ApiError(400, "Invalid email or password.");
+  }
+
+  //! 5. User AccessToken and RefreshToken
+  /*
+  called the generateAcessandRefreshToken function which returns accessToken and refreshToken.
+  */
+  const { accessToken, refreshToken } = await generateAccessandRefreshToken(
+    user._id
+  );
+
+  //fresh instance of user which is created just after user has logged in (without password and refreshToken)
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+
+  //! 6. Send in Cookies (using cookie parser)
+  /*
+  
+  */
+  // makes the cookies secure and only modifiable by the server.
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  //! 7. Return Respone to frontend.
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accessToken,
+          refreshToken,
+        },
+        "User logged in successfully."
+      )
+    );
+});
+
+//? Crazy Logout Functionality.
+const logoutUser = asyncHandler(async (req, res) => {
+  await User.findByIdAndUpdate(
+    req.user._id, //to find. (this user was from the authmiddlewares we made, check for clarity.)
+    {
+      $set: {
+        refreshToken: null, //to update.
+      },
+    },
+    {
+      new: true, //returns the updated document.
+    }
+  );
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  //updating the cookies (clearing them)
+  return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "User logged out successfully."));
+});
+
+export { logoutUser, registerUser, loginUser };
