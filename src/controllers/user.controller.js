@@ -1,9 +1,13 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
-import { uploadOnCloudinary } from "../utils/Cloudinary.js";
+import {
+  destroyOnCloudinary,
+  uploadOnCloudinary,
+} from "../utils/Cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 
 const generateAccessandRefreshToken = async (userId) => {
   try {
@@ -356,7 +360,9 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 const getCurrentUser = asyncHandler(async (req, res) => {
   return res
     .status(200)
-    .json(200, req.user, "Current user was fetched succesgsfully.");
+    .json(
+      new ApiResponse(200, req.user, "Current user was fetched successfully.")
+    );
 });
 
 //? If user wants to update his details:
@@ -369,7 +375,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
   }
 
   // Self Explanatory.
-  const updatedUser = User.findByIdAndUpdate(
+  const updatedUser = await User.findByIdAndUpdate(
     req.user?._id, //instance comes from auth handler.
     {
       $set: {
@@ -393,10 +399,8 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     Flow:
    1. multer middleware to handle files.
    2. if user is logged in, can change the coverImage/avatar. (auth middleware)
-  
-    
-  
   */
+
   //initially we had taken req.files (in register controller) as user had option to send multiple files at the same time.
   const avatarLocalPath = req.file?.path;
 
@@ -410,9 +414,16 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Avatar File couldnt be uploaded.");
   }
 
+  //Delete the oldAvatarImage on cloudinary (error handling has been done in the utility file.)
+  const imageToBeDeleted = await destroyOnCloudinary(req.user?.avatar);
+
+  if (!imageToBeDeleted) {
+    throw new ApiError(400, "Previous Image couldnt be erased.");
+  }
+
   //Updating user.
-  const updatedUser = User.findByIdAndUpdate(
-    req.user?.id,
+  const updatedUser = await User.findByIdAndUpdate(
+    req.user?._id,
     {
       $set: {
         avatar: updatedAvatar.url,
@@ -426,6 +437,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, updatedUser, "Avatar updated successfully."));
 });
 
+//? If user wants to update his cover image.
 const updateCoverImage = asyncHandler(async (req, res) => {
   const coverImageLocalPath = req.file?.path;
 
@@ -439,8 +451,15 @@ const updateCoverImage = asyncHandler(async (req, res) => {
     throw new ApiError(400, "File couldnt be uploaded.");
   }
 
+  //deleting the old url from cloudinary.
+  const imageToBeDeleted = await destroyOnCloudinary(req.user?.coverImage);
+
+  if (!imageToBeDeleted) {
+    throw new ApiError(400, "Previous Image couldnt be erased.");
+  }
+
   //updating on the DB
-  const updatedUser = User.findByIdAndUpdate(
+  const updatedUser = await User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: {
@@ -457,6 +476,216 @@ const updateCoverImage = asyncHandler(async (req, res) => {
     );
 });
 
+//? Details required for creating user channel profile.
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  // we wil get the username from the url. (hence req.params is used)
+  const { username } = req.params;
+
+  //we used trim just to remove whitespaces.
+  if (!username.trim()) {
+    throw new ApiError(400, "Username not found!");
+  }
+
+  /*
+   we could have used User.find({username}) as username is already in database. Then get its _id and performed aggregation. 
+   But we can directly use $match to find the paramter. 
+
+
+  ? $match
+  Filters documents based on a specified query predicate. Matched documents are passed to the next pipeline stage.
+  The syntax for the $match query predicate is identical to the syntax used in the query argument of a find() command.
+  In our case, we find one specific user, so only one user is found and passed to the next pipeline.
+  To perform a successful match, the types must be identical.
+  { $match: { <query predicate> } }
+   
+
+  ? "query predicate"
+   An expression that returns a boolean indicating whether a document matches the specified query. For example, { name: { $eq: "Alice" } }, which returns documents that have a field "name" whose value is the string "Alice".
+
+
+  ? $lookup: (layman terms - lookup 1 in 2's file and also add 1's stuff in 2) (left outer join)
+     from: "authors" - Specifies the Foreign Collection.
+     localField: "author_id" - Specifies the field in the Input document.
+     foreignField: "_id" - Specifies the matching field in the Foreign document.
+     as: "author_info" - Specifies the name of the new array field in the output. 
+
+
+     lookups can be multiple but also they are seperate documents,
+     As we see below, we have created 2 $lookup documents and then added them using $addfields into the main documented  which is later projected using $project.
+  */
+
+  //? aggregation, returns an array which calculated result.
+
+  const channel = await User.aggregate([
+    {
+      $match: {
+        username: username?.toLowerCase(), //checking for username in the DB.
+      },
+    },
+    //lookup for finding the subscribers for a channel
+    {
+      $lookup: {
+        from: "subscriptions", //lowercase and plural in db also.
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers", // this will be an array.
+      },
+    },
+    //lookup for finding the channels which user has subscribed to.
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedTo", // this will be an array.
+      },
+    },
+
+    //add these fields in the schema.
+    {
+      $addFields: {
+        subscribersCount: {
+          //$size operator to count the number of elements in the subscribers array (created in the first $lookup). This gives the total number of subscribers for the channel.
+          $size: "$subscribers", // Also the $ before subscribers is bcz subscribers is now a field.
+        },
+        channelsSubscribedToCount: {
+          $size: "$subscribedTo",
+        },
+
+        //if subscribed, then returns true, and in frontend, subscribed button can be toggled.
+        /* 
+        isSubscribed:
+         Uses the $cond (conditional) operator to determine if the currently logged-in user (identified by req.user?._id) is subscribed to this channel.
+         if condition: It uses the $in operator to check if req.user?._id exists within the array of all subscriber IDs. The expression "$subscribers.subscriber" extracts an array containing only the subscriber ID from every document in the $subscribers array.
+         then: If the ID is found (meaning the logged-in user is a subscriber), the field is set to true.
+         else: If the ID is not found, the field is set to false.
+        */
+        isSubscribed: {
+          //condition operator.
+          $cond: {
+            //if req.user.id is there inside the subscribers object, then return true.
+            if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+            then: true,
+            else: false,
+          },
+        },
+      },
+    },
+    /*
+    The $project stage is a core operator in the MongoDB Aggregation Pipeline used to reshape or restructure documents in the resulting stream.
+    It is primarily used to select, rename, calculate, or suppress fields to control exactly what information is passed to the next stage of the pipeline or returned to the user.
+    */
+    {
+      $project: {
+        username: 1,
+        fullName: 1,
+        email: 1,
+        avatar: 1,
+        coverImage: 1,
+        subscribersCount: 1,
+        isSubscribed: 1,
+        channelsSubscribedToCount: 1,
+      },
+    },
+  ]);
+
+  //aggregation returns an array, and mostly we will get only 1 value as username will be one. (unique)
+  if (!channel?.length) {
+    throw new ApiError(404, "Channel does not exist.");
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, channel[0], "User channel fetched successfully.")
+    );
+});
+
+//? For fetching watch history of user.
+const getUserWatchHistory = asyncHandler(async (req, res) => {
+  /*
+  For $match,
+    we could have used req.user._id directly and could have found out the user, but 
+    ? req.user._id is a string. (console.log and check this)
+    You cannot pass req.user._id directly in the _id field within the aggregation's $match stage because the value of req.user._id is typically a plain string, but the MongoDB _id field is stored as a special ObjectId data type in the DB. 
+
+    hence we converted it to objectId datatype using 
+      new mongoose.ObjectId(req.user._id) 
+      note: we wont optionally chain here as we will pass this through verifyJWT first so getting req.user._id will be very possible.
+
+
+
+      ? note: we are here assuming that the watchHistory field has values which can be matched with _id(of the video model).
+        we will have to write a seperate controller logic which will push these video_id (we get this from frontend) into the watchHistory array.
+
+  */
+  //! RETURNS AN ARRAY
+  const user = await User.aggregate([
+    {
+      $match: {
+        _id: new mongoose.ObjectId(req.user._id),
+      },
+    },
+    {
+      $lookup: {
+        from: "videos",
+        localField: "watchHistory", //assume it has (video_idA, video_idB)
+        foreignField: "_id", // here _id is video_id.
+        as: "watchHistory", // overwriting the existing watchHistory for better handling.
+        /*
+        Now if you look at the video model, there is a field called as owner, which is the one who has uploaded the video or the user.
+        At this stage, its completely empty.
+        Hence we will have to write a subpipeline that adds the "users" to the "owner" field using $Lookup.
+
+          Remember we are currently in video model,
+          lookup from users.
+        */
+        pipeline: [
+          {
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner", //this owner has everything about the user, but we need only a select few
+              pipeline: [
+                {
+                  $project: {
+                    username: 1,
+                    email: 1,
+                    fullName: 1,
+                    avatar: 1,
+                    //now this owner field is populated with a good structure and is an array.
+                  },
+                },
+                {},
+              ],
+            },
+          },
+          {
+            //as owner is array, we remove its first element and pass it, just so that its easy for the frontend.
+            $addFields: {
+              //overriting the same field,
+              owner: {
+                $first: "$owner", //will remove the first element of the "field" owner (hence $ sign)
+              },
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        user[0].watchHistory,
+        "watchHistory fetched successfully."
+      )
+    );
+});
+
 export {
   refreshAccessToken,
   logoutUser,
@@ -467,4 +696,6 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   updateCoverImage,
+  getUserChannelProfile,
+  getUserWatchHistory,
 };

@@ -3,6 +3,7 @@ dotenv.config();
 
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs"; // file handling package in node.js
+import { ApiError } from "./ApiError";
 
 /*
 BASIC CLOUDINARY CONFIG: read documentation for more details.
@@ -41,4 +42,27 @@ const uploadOnCloudinary = async (localFilePath) => {
   }
 };
 
-export { uploadOnCloudinary };
+// removes images that were uploaded on cloudinary.
+const destroyOnCloudinary = async (fileUrl) => {
+  try {
+    if (!fileUrl) {
+      throw new ApiError(400, "URL not found to destory.");
+    }
+
+    // regex- regular expression,very helpful in removing/finding/matching certain things in strings.
+    const regex = /[\w\.\$]+(?=.png|.jpg|.gif)/;
+
+    //.exec() will match the given parameter according to the regex.
+    let matches = regex.exec(fileUrl); //matches will be an array as .exec will return an array.
+
+    if (matches !== null) {
+      await cloudinary.uploader
+        .destroy(matches[0])
+        .then((result) => console.log(result)); //logs to console the result which is returned by .destroy.
+    }
+  } catch (error) {
+    throw new ApiError(400, "Error while deleting existing image.");
+  }
+};
+
+export { uploadOnCloudinary, destroyOnCloudinary };
