@@ -155,6 +155,7 @@ const loginUser = asyncHandler(async (req, res) => {
   /*
   User cannot be used here as it is an object of monogoDB's mongoose, methods availble using User object is "findone() etc."
   The response back from mongoDB (instance) is stored in "user" which is defined below, so use this instance if you want details already fetched from mongoDB.
+
   */
   const user = await User.findOne({
     $or: [{ username }, { email }], //mongoose "or" operator (very useful)
@@ -276,7 +277,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     );
 
     //refreshToken has _id refrence, check the generateRefreshToken().
-    const user = User.findById(decodedToken?._id);
+    const user = await User.findById(decodedToken?._id);
 
     if (!user) {
       throw new ApiError(401, "Invalid Refresh Token");
@@ -291,8 +292,9 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     }
 
     //If both are equal then only we make new accessToken.
-    const { accessToken, newRefreshToken } =
-      await generateAccessandRefreshToken(user._id);
+    const { accessToken, refreshToken } = await generateAccessandRefreshToken(
+      user._id
+    );
 
     const options = {
       httpOnly: true,
@@ -302,20 +304,20 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     return res
       .status(200)
       .cookie("accessToken", accessToken, options)
-      .cookie("refreshToken", newRefreshToken, options)
+      .cookie("refreshToken", refreshToken, options)
       .json(
         new ApiResponse(
           "200",
-          { accessToken, refreshToken: newRefreshToken },
+          { accessToken, refreshToken: refreshToken },
           "Refresh and Access tokens updated."
         )
       );
   } catch (error) {
-    throw new ApiError(200, error?.message || "RefreshToken is invalid.");
+    throw new ApiError(401, error?.message || "RefreshToken is invalid.");
   }
 });
 
-//? If user wants to change his password.
+//? If user wants to change his password. (uses raw data in postman)
 const changeCurrentPassword = asyncHandler(async (req, res) => {
   /*
     Firstly, we are going to take input fields from the user which is oldPassword and newPassword in req.body
@@ -380,7 +382,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
     {
       $set: {
         fullName: fullName, //fullname = newfullname (given by user)
-        email: email, //same as
+        email: email, //email = newEmail (given by user)
       },
     },
     { new: true } //returns whole object with new values.
@@ -415,11 +417,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
   }
 
   //Delete the oldAvatarImage on cloudinary (error handling has been done in the utility file.)
-  const imageToBeDeleted = await destroyOnCloudinary(req.user?.avatar);
-
-  if (!imageToBeDeleted) {
-    throw new ApiError(400, "Previous Image couldnt be erased.");
-  }
+  await destroyOnCloudinary(req.user?.avatar);
 
   //Updating user.
   const updatedUser = await User.findByIdAndUpdate(
@@ -445,18 +443,14 @@ const updateCoverImage = asyncHandler(async (req, res) => {
     throw new ApiError("Cover image file is missing.");
   }
 
-  const updatedCoverImage = uploadOnCloudinary(coverImageLocalPath);
+  const updatedCoverImage = await uploadOnCloudinary(coverImageLocalPath);
 
   if (!updatedCoverImage) {
     throw new ApiError(400, "File couldnt be uploaded.");
   }
 
   //deleting the old url from cloudinary.
-  const imageToBeDeleted = await destroyOnCloudinary(req.user?.coverImage);
-
-  if (!imageToBeDeleted) {
-    throw new ApiError(400, "Previous Image couldnt be erased.");
-  }
+  await destroyOnCloudinary(req.user?.coverImage);
 
   //updating on the DB
   const updatedUser = await User.findByIdAndUpdate(

@@ -3,7 +3,7 @@ dotenv.config();
 
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs"; // file handling package in node.js
-import { ApiError } from "./ApiError";
+import { ApiError } from "./ApiError.js";
 
 /*
 BASIC CLOUDINARY CONFIG: read documentation for more details.
