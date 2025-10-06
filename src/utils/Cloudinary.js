@@ -42,7 +42,10 @@ const uploadOnCloudinary = async (localFilePath) => {
   }
 };
 
-// removes images that were uploaded on cloudinary.
+/* removes images that were uploaded on cloudinary based on url
+  Deletion from cloudinary is basically happening with the help of regex.
+  We can use public_id also.
+*/
 const destroyOnCloudinary = async (fileUrl) => {
   try {
     if (!fileUrl) {

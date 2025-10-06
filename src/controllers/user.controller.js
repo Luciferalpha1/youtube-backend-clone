@@ -553,6 +553,14 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
          if condition: It uses the $in operator to check if req.user?._id exists within the array of all subscriber IDs. The expression "$subscribers.subscriber" extracts an array containing only the subscriber ID from every document in the $subscribers array.
          then: If the ID is found (meaning the logged-in user is a subscriber), the field is set to true.
          else: If the ID is not found, the field is set to false.
+
+
+
+         ? Remember: req.user._id is the person who is logged in to videoTube and is watching the channel. (channel of a different user/owner). 
+          User and Owner and two seperate entities,
+          User - One who is viewing the channel/subscribing to owner
+          owner - one who will be uploading video, basically a creator.
+
         */
         isSubscribed: {
           //condition operator.
@@ -603,7 +611,7 @@ const getUserWatchHistory = asyncHandler(async (req, res) => {
     ? req.user._id is a string. (console.log and check this)
     You cannot pass req.user._id directly in the _id field within the aggregation's $match stage because the value of req.user._id is typically a plain string, but the MongoDB _id field is stored as a special ObjectId data type in the DB. 
 
-    hence we converted it to objectId datatype using 
+    hence we converted it to ObjectId datatype using 
       new mongoose.ObjectId(req.user._id) 
       note: we wont optionally chain here as we will pass this through verifyJWT first so getting req.user._id will be very possible.
 
