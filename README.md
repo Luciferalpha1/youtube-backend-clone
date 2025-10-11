@@ -70,6 +70,8 @@ npm start
 
 ---
 
-This code is heavily inspired by [Chai aur Code](https://www.youtube.com/@chaiaurcode)
+The project structure and approach were inspired by [Chai aur Code](https://www.youtube.com/@chaiaurcode).
+<br>The primary goal, however, was to learn production grade backend development in depth by understanding each concept and making meaningful modifications throughout the project.
+<br>Thank you.
 
 ---
