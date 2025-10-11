@@ -1,10 +1,15 @@
 import mongoose, { isValidObjectId } from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import ApiError from "../utils/ApiError.js";
-import { uploadOnCloudinary } from "../utils/Cloudinary.js";
+import {
+  destroyOnCloudinary,
+  uploadOnCloudinary,
+} from "../utils/Cloudinary.js";
 import { Video } from "../models/video.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../models/user.model.js";
+import { Like, like } from "../models/like.model.js";
+import { Comment } from "../models/comment.model.js";
 
 //? If users wants to publish/upload his video.
 const publishAVideo = asyncHandler(async (req, res) => {
@@ -46,12 +51,12 @@ const publishAVideo = asyncHandler(async (req, res) => {
     description,
     duration: videoFile.duration, //from cloudinary return object.
     videoFile: {
-      url: videoFile.url,
-      public_id: videoFile.public_id,
+      public_id: "String",
+      url: "String",
     },
     thumbnail: {
-      url: thumbnail.url,
-      public_id: thumbnail.public_id,
+      public_id: "String",
+      url: "String",
     },
     owner: req.user?._id, //from verifyJWT
     isPublished: false, //we dont want the video to be direclty published, we will set this is later controllers.
@@ -219,4 +224,132 @@ const getVideoById = asyncHandler(async (req, res) => {
     );
 });
 
-export { publishAVideo, getVideoById };
+//? Update video details, given by user.
+const updateVideoDetails = asyncHandler(async (req, res) => {
+  const { title, description } = req.body;
+  const { videoId } = req.params;
+
+  if (!(title && description)) {
+    throw new ApiError(400, "Title and description are required.");
+  }
+
+  if (!isValidObjectId(videoId)) {
+    throw new ApiError(400, "Invalid Video/Video not found.");
+  }
+
+  //get video by _id
+  const videoDetails = await Video.findById(videoId);
+
+  if (!videoDetails) {
+    throw new ApiError(404, "No Video Found. Try again!");
+  }
+
+  //only video owner should be able to edit the video
+  /*
+    Remember: Owner and req.user are 2 different entities.
+      if video owner !== req.user then throw apierror.
+  */
+  if (videoDetails.owner.toString() !== req.user?._id.toString()) {
+    throw new ApiError(
+      400,
+      "This video cant be edited by you. Contact the owner of this video."
+    );
+  }
+
+  //getting thumbnail from multer.
+  /*
+  in the route for this specific controller, upload.single() will be used.
+  */
+  const newThumbnailLocalPath = req.file?.path;
+
+  if (newThumbnailLocalPath) {
+    throw new ApiError(400, "Thumbnail is required.");
+  }
+
+  //upload new thumbnail in cloudinary.
+  const newThumbnail = await uploadOnCloudinary(newThumbnailLocalPath);
+
+  if (!newThumbnail) {
+    throw new ApiError(400, "File couldnt be uploaded on cloudinary.");
+  }
+
+  //delete old thumbnail from cloudinary
+  await destroyOnCloudinary(videoDetails.thumbnail.public_id);
+
+  //update in db, with error handling
+  const updatedVideo = Video.findByIdAndUpdate(
+    videoId,
+    {
+      $set: {
+        title, //new title
+        description, //new description
+        thumbnail: {
+          public_id: newThumbnail.public_id,
+          url: newThumbnail.url,
+        },
+      },
+    },
+    { new: true }
+  );
+
+  if (!updatedVideo) {
+    throw new ApiError(500, "Video updation failed. Please try again.");
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, updatedVideo, "Video details updated successfully.")
+    );
+});
+
+//? If user wants to delete this video (this includes all the details of the video too)
+const deleteVideo = asyncHandler(async (req, res) => {
+  const { videoId } = req.params;
+
+  //check videoId is valid or not.
+  if (!isValidObjectId(videoId)) {
+    throw new ApiError(400, "Invalid videoId");
+  }
+
+  //get whole video document
+  const video = await Video.findById(videoId);
+
+  if (!video) {
+    throw new ApiError(404, "Video was not found.");
+  }
+
+  //check if viewer is owner,
+  if (video?.owner.toString() !== req.user?._id.toString()) {
+    throw new ApiError(400, "You are not the owner of this video.");
+  }
+
+  //delete the video from database.
+  const deleteVideo = await Video.findByIdAndDelete(video?._id);
+
+  if (!deleteVideo) {
+    throw new ApiError(
+      400,
+      "This video could not be deleted. Please try again!"
+    );
+  }
+
+  //deletion of video,thumbnail from cloudinary.
+  await destroyOnCloudinary(video.videoFile.public_id, "video");
+  await destroyOnCloudinary(video.thumbnail.public_id, "image");
+
+  //deleting the likes on the video
+  await Like.deleteMany({
+    video: videoId,
+  });
+  //deleting the comments on the video
+  await Comment.deleteMany({
+    video: videoId,
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Video has been successfully deleted."));
+});
+
+export { publishAVideo, getVideoById, updateVideoDetails, deleteVideo };

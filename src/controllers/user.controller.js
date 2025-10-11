@@ -108,8 +108,14 @@ const registerUser = asyncHandler(async (req, res) => {
   */
   const user = await User.create({
     fullName,
-    avatar: avatar.url,
-    coverImage: coverImage?.url || "",
+    avatar: {
+      public_id: avatar.public_id,
+      url: avatar.secure_url,
+    },
+    coverImage: {
+      public_id: coverImage.public_id || "",
+      url: coverImage.secure_url || "",
+    },
     email,
     password,
     username: username.toLowerCase(), //we prefer lowercase strings.
@@ -417,14 +423,17 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
   }
 
   //Delete the oldAvatarImage on cloudinary (error handling has been done in the utility file.)
-  await destroyOnCloudinary(req.user?.avatar);
+  await destroyOnCloudinary(req.user?.avatar.public_id, "image");
 
   //Updating user.
   const updatedUser = await User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: {
-        avatar: updatedAvatar.url,
+        avatar: {
+          public_id: updatedAvatar.public_id,
+          url: updatedAvatar.secure_url,
+        },
       },
     },
     { new: true }
@@ -450,14 +459,17 @@ const updateCoverImage = asyncHandler(async (req, res) => {
   }
 
   //deleting the old url from cloudinary.
-  await destroyOnCloudinary(req.user?.coverImage);
+  await destroyOnCloudinary(req.user?.coverImage.public_id, "image");
 
   //updating on the DB
   const updatedUser = await User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: {
-        coverImage: updatedCoverImage.url,
+        coverImage: {
+          public_id: updatedCoverImage.public_id,
+          url: updatedCoverImage.secure_url,
+        },
       },
     },
     { new: true }

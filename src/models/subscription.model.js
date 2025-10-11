@@ -15,7 +15,7 @@ const subscriptionSchema = new Schema(
   { timestamps: true }
 );
 
-export const subscription = mongoose.model("Subscription", subscriptionSchema);
+export const Subscription = mongoose.model("Subscription", subscriptionSchema);
 
 /*
 Everytime someone hits subscribe, a new document is created which has the name of the subscriber(user) and also the channel to which you are subscribing. 

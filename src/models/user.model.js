@@ -6,7 +6,7 @@ const userSchema = new Schema(
   {
     username: {
       type: String,
-      required: true,
+      required: [true, "username is required"],
       unique: true,
       lowercase: true,
       trim: true,
@@ -27,11 +27,17 @@ const userSchema = new Schema(
       index: true,
     },
     avatar: {
-      type: String, //cloudinary url(files,images)
+      type: {
+        public_id: "String",
+        url: "String",
+      },
       required: true,
     },
     coverImage: {
-      type: String,
+      type: {
+        public_id: "String",
+        url: "String", //cloudinary url
+      },
     },
     //array of video_id.
     watchHistory: [

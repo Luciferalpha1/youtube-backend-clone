@@ -46,25 +46,24 @@ const uploadOnCloudinary = async (localFilePath) => {
   Deletion from cloudinary is basically happening with the help of regex.
   We can use public_id also.
 */
-const destroyOnCloudinary = async (fileUrl) => {
+const destroyOnCloudinary = async (public_id, resource_type) => {
   try {
-    if (!fileUrl) {
-      throw new ApiError(400, "URL not found to destory.");
+    if (!public_id) {
+      throw new ApiError(400, "Public Id not provided for deletion.");
     }
 
-    // regex- regular expression,very helpful in removing/finding/matching certain things in strings.
-    const regex = /[\w\.\$]+(?=.png|.jpg|.gif)/;
+    //delete from cloudinary
+    const result = await cloudinary.uploader.destroy(public_id, {
+      resource_type: resource_type,
+    });
 
-    //.exec() will match the given parameter according to the regex.
-    let matches = regex.exec(fileUrl); //matches will be an array as .exec will return an array.
-
-    if (matches !== null) {
-      await cloudinary.uploader
-        .destroy(matches[0])
-        .then((result) => console.log(result)); //logs to console the result which is returned by .destroy.
-    }
+    return result;
   } catch (error) {
-    throw new ApiError(400, "Error while deleting existing image.");
+    console.log("Cloudinary deletion failed", error);
+    throw new ApiError(
+      500,
+      "Error while deleting existing file from cloudinary."
+    );
   }
 };
 
