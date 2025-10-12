@@ -352,4 +352,207 @@ const deleteVideo = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "Video has been successfully deleted."));
 });
 
-export { publishAVideo, getVideoById, updateVideoDetails, deleteVideo };
+//? Set publish status.
+const togglePublishStatus = asyncHandler(async (req, res) => {
+  const { videoId } = req.params;
+
+  if (!isValidObjectId(videoId)) {
+    throw new ApiError(400, "Invalid video id");
+  }
+
+  const videoDetails = await Video.findById(videoId);
+
+  if (!videoDetails) {
+    throw new ApiError(400, "This video doesnt exist.");
+  }
+
+  if (videoDetails.owner.toString() !== req.user?._id.toString()) {
+    throw new ApiError(400, "You cant make changes to this video.");
+  }
+
+  /*
+    Take the inital value of isPublished and then change it to new value/toggle it
+    ex: if inital value of isPublished was true
+      then !true = false.
+ */
+  const togglePublish = await Video.findByIdAndUpdate(
+    videoId,
+    {
+      $set: {
+        isPublished: !videoDetails.isPublished,
+      },
+    },
+    { new: true }
+  );
+
+  if (!togglePublish) {
+    throw new ApiError(500, "Failed to toggle video publish status.");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        isPublished: togglePublish.isPublished,
+      },
+      "Video Publish toggled successfully!"
+    )
+  );
+});
+
+//? For a particular query, find all videos.
+const getAllVideos = asyncHandler(async (req, res) => {
+  /*
+  Steps to implement getVideos function:
+  
+  1. Extract query parameters like page, limit, sort, search, etc. from req.query.
+  2. Build a filter object (e.g., match by title or description using regex for search).
+  3. Define sorting options (e.g., by createdAt or views).
+  4. Use MongoDB aggregation pipeline to:
+  - Match videos based on filters.
+  - Lookup user/channel info if needed.
+  - Sort videos according to the sort criteria.
+  - Skip and limit documents for pagination.
+  5. Execute the aggregation using Video.aggregate().
+  6. Return the paginated list of videos as a JSON response.
+  7. Handle any errors using try-catch and send an appropriate response.
+  */
+
+  const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
+
+  const pipeline = [];
+  /*
+If user provided a search term, MongoDB Atlas will perform a full-text search.
+ index: "search-videos" refers to a search index created in MongoDB Atlas UI.
+ path: tells MongoDB which fields to search in (title and description).
+*/
+
+  //! SEARCHING BASED ON SEARCH QUERY. (atlas search index)
+  if (query) {
+    pipeline.push({
+      $search: {
+        index: "search-videos", //find here
+        text: {
+          query: query, //what to find
+          path: [title, description], //search only on title and description
+        },
+      },
+    });
+  }
+
+  //! FOR A PARTICULAR USER, GET ALL VIDEOS.
+  //userId should exist here.
+  if (userId) {
+    if (!isValidObjectId(userId)) {
+      throw new ApiError(400, "Invalid User.");
+    }
+
+    /*
+      we are trying to match the owner (of video) with the req.user,
+      so that we can find the number of videos for this respective user.
+
+      If a userId is given, only videos uploaded by that user are fetched.
+    */
+    pipeline.push({
+      $match: {
+        owner: new mongoose.ObjectId(userId),
+      },
+    });
+  }
+
+  //fetch videos that are isPublished: true
+  pipeline.push({
+    $match: {
+      isPublished: true,
+    },
+  });
+
+  //!!SORTING
+  //sortBy - can be views, duration, createdAt
+  //sortType - can be ascending(-1) or descending(+1)
+  if (sortBy && sortType) {
+    pipeline.push({
+      $sort: {
+        [sortBy]: sortType === "asc" ? -1 : 1,
+      },
+    });
+  }
+  // If sortBy and sortType is not given, sort using createdAt (ascending).
+  else {
+    pipeline.push({
+      sortBy: {
+        createdAt: -1,
+      },
+    });
+  }
+
+  //! FINDING DETAILS OF VIDEO OWNER.
+  pipeline.push(
+    {
+      //Local collection: Video, Foreign collection: User
+      $lookup: {
+        from: "users",
+        localField: "owner",
+        foreignField: "_id",
+        as: "ownerDetails",
+        pipeline: [
+          {
+            $project: {
+              username: 1,
+              "avatar.url": 1,
+              createdAt: 1,
+            },
+          },
+        ],
+      },
+    },
+    //$unwind converts the ownerDetails array into a single object for ease of access
+    {
+      $unwind: "$ownerDetails",
+    }
+  );
+
+  //! Aggregating the "pipeline" array.
+  /*
+  In other controlles, whenever we used aggregation pipelines, we always did
+    const "modelname" = await model.aggregate([
+          "here we used to write our pipelines"
+    ])
+
+
+    but as we have seperately made an array called "pipeline"
+    we now have to aggregate it.
+  */
+
+  const videoAggregate = await Video.aggregate(pipeline);
+
+  //! Pagination setup:
+  // 1. Extracts 'page' and 'limit' values from the query parameters (default: page=1, limit=10)
+  // 2. Converts them from strings to integers using parseInt(), the 10 means base is decimal meaning convert to decimal.
+  // 3. Stores them in the 'options' object for pagination settings
+  // 4. These options are passed to 'aggregatePaginate()' to:
+  //      - Control which page of results to fetch
+  //      - Control how many videos to display per page
+  // Example: ?page=2&limit=5 → returns 5 videos from the 2nd page of results
+
+  const options = {
+    page: parseInt(page, 10),
+    limit: parseInt(limit, 10),
+  };
+
+  //! AGGREGATION AND PAGINATION USECASE:
+  //custom plugin (aggregatePaginate) is used. (check video model)
+  const video = await Video.aggregatePaginate(videoAggregate, options);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, video, "All videos fetched successfully."));
+});
+export {
+  publishAVideo,
+  getVideoById,
+  updateVideoDetails,
+  deleteVideo,
+  togglePublishStatus,
+  getAllVideos,
+};
