@@ -24,7 +24,9 @@ app.use(cookieParser());
 //? just for "making it clean" purposes we import here. Nothings wrong.
 
 import userRouter from "./routes/user.routes.js";
+import videoRouter from "./routes/video.routes.js";
 
 app.use("/api/v1/users", userRouter);
+app.use("/api/v1/videos", videoRouter);
 
 export { app };
