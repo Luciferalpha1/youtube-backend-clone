@@ -6,9 +6,9 @@ import {
   publishAVideo,
   togglePublishStatus,
   updateVideoDetails,
-} from "../controllers/video.controller";
-import { upload } from "../middlewares/multer.middlewares";
-import { verifyJWT } from "../middlewares/auth.middlewares";
+} from "../controllers/video.controller.js";
+import { upload } from "../middlewares/multer.middlewares.js";
+import { verifyJWT } from "../middlewares/auth.middlewares.js";
 
 const router = Router();
 
