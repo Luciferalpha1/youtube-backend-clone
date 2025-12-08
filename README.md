@@ -6,33 +6,38 @@ This project focuses on building scalable REST APIs for video sharing, user auth
 ---
 
 ## Features
-- User authentication with JWT  
-- Video upload and management  
-- Like, dislike, and comment functionalities  
-- Playlist creation and management  
-- Channel subscription system  
-- Secure routes using middleware  
-- MongoDB integration with Mongoose  
+
+- User authentication with JWT
+- Video upload and management
+- Like, dislike, and comment functionalities
+- Playlist creation and management
+- Channel subscription system
+- Secure routes using middleware
+- MongoDB integration with Mongoose
 
 ---
 
 ## Tech Stack
-- **Backend:** Node.js, Express.js  
-- **Database:** MongoDB, Mongoose  
-- **Authentication:** JWT, bcrypt  
-- **Cloud Storage:** Cloudinary  
+
+- **Backend:** Node.js, Express.js
+- **Database:** MongoDB, Mongoose
+- **Authentication:** JWT, bcrypt
+- **Cloud Storage:** Cloudinary
 
 ---
 
 ## Installation
 
 ### Prerequisites
+
 Ensure you have the following installed:
-- Node.js (v16 or higher)  
-- MongoDB (local or cloud instance)  
-- npm or yarn  
+
+- Node.js (v16 or higher)
+- MongoDB (local or cloud instance)
+- npm or yarn
 
 ### Setup Steps
+
 ```bash
 # Clone the repository
 git clone https://github.com/Luciferalpha1/youtube-backend-clone.git
@@ -55,9 +60,11 @@ CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 # Start the development server
 npm start
 ```
+
 ---
 
 ## Future Improvements
+
 - Implement video recommendations
 
 - Add analytics for creators
@@ -73,5 +80,13 @@ npm start
 The project structure and approach were inspired by [Chai aur Code](https://www.youtube.com/@chaiaurcode).
 <br>The primary goal, however, was to learn production grade backend development in depth by understanding each concept and making meaningful modifications throughout the project.
 <br>Thank you.
+
+---
+
+## Reference
+
+This project was developed by independently writing the backend logic while using the repository  
+[Hruthik-28/youtube-twitter](https://github.com/Hruthik-28/youtube-twitter)  
+as a reference for understanding certain concepts and validating implementation logic whenever needed.
 
 ---
