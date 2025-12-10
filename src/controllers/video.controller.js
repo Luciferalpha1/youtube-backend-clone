@@ -506,7 +506,7 @@ If user provided a search term, MongoDB Atlas will perform a full-text search.
         ],
       },
     },
-    //$unwind converts the ownerDetails array into a single object for ease of access
+    //$unwind converts the ownerDetails array into a single object with each element for ease of access
     {
       $unwind: "$ownerDetails",
     }
